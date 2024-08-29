@@ -1,46 +1,54 @@
-// server.js or app.js
+require('dotenv').config();
 
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const bodyParser = require('body-parser');
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(bodyParser.json());
 
-// Connect to MongoDB
-mongoose.connect('your_mongodb_connection_string', {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-});
+mongoose.connect(process.env.MONGO_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+})
+.then(() => console.log('Connected to MongoDB'))
+.catch((error) => console.error('MongoDB connection error:', error));
 
-// Define User Schema
 const userSchema = new mongoose.Schema({
-    username: String,
-    password: String, // Placeholder for now, can be ignored
+  username: { type: String, required: true, unique: true },
+  password: { type: String, required: true },
 });
 
 const User = mongoose.model('User', userSchema);
 
-// Signup route
 app.post('/signup', async (req, res) => {
-    const { username, password } = req.body;
-    const user = new User({ username, password });
-    await user.save();
-    res.send({ message: 'User registered successfully' });
+  const { username, password } = req.body;
+  try {
+    const newUser = new User({ username, password });
+    await newUser.save();
+    res.status(201).send('User created');
+  } catch (error) {
+    res.status(400).send('Error creating user: ' + error.message);
+  }
 });
 
-// Login route
 app.post('/login', async (req, res) => {
-    const { username } = req.body;
-    const user = await User.findOne({ username });
+  const { username, password } = req.body;
+  try {
+    const user = await User.findOne({ username, password });
     if (user) {
-        res.send({ message: 'Login successful', user });
+      res.status(200).send('Login successful');
     } else {
-        res.status(400).send({ message: 'User not found' });
+      res.status(400).send('Invalid credentials');
     }
+  } catch (error) {
+    res.status(500).send('Server error: ' + error.message);
+  }
 });
 
-app.listen(8000, () => {
-    console.log('Server is running on port 8000');
+const PORT = process.env.PORT || 8000;
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
 });
