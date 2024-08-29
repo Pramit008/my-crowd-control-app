@@ -1,5 +1,5 @@
 require('dotenv').config();
-
+const axios = require('axios');
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -47,6 +47,19 @@ app.post('/login', async (req, res) => {
     res.status(500).send('Server error: ' + error.message);
   }
 });
+
+
+// app.post('/get-location', ...)
+app.post('/get-location', async (req, res) => {
+    try {
+      const response = await axios.post(`https://www.googleapis.com/geolocation/v1/geolocate?key=${process.env.GOOGLE_MAPS_API_KEY}`);
+      res.status(200).json(response.data.location);
+    } catch (error) {
+      console.error('Error fetching location:', error.message);
+      res.status(500).json({ error: 'Failed to fetch location' });
+    }
+  });
+  
 
 const PORT = process.env.PORT || 8000;
 app.listen(PORT, () => {
