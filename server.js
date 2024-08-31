@@ -16,13 +16,20 @@ mongoose.connect(process.env.MONGO_URI, {
 .then(() => console.log('Connected to MongoDB'))
 .catch((error) => console.error('MongoDB connection error:', error));
 
+// Define available sectors
+const sectors = ['economics', 'business', 'psr'];
+let lastAssignedSectorIndex = -1;  // Initialize the sector counter
+
+// User schema definition
 const userSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true },
   password: { type: String, required: true },
+  assignedSector: { type: String, default: null },  // New users start with null (unredeemed ticket)
 });
 
 const User = mongoose.model('User', userSchema);
 
+// User signup endpoint
 app.post('/signup', async (req, res) => {
   const { username, password } = req.body;
   try {
@@ -34,6 +41,7 @@ app.post('/signup', async (req, res) => {
   }
 });
 
+// User login endpoint
 app.post('/login', async (req, res) => {
   const { username, password } = req.body;
   try {
@@ -48,18 +56,63 @@ app.post('/login', async (req, res) => {
   }
 });
 
-
-// app.post('/get-location', ...)
-app.post('/get-location', async (req, res) => {
-    try {
-      const response = await axios.post(`https://www.googleapis.com/geolocation/v1/geolocate?key=${process.env.GOOGLE_MAPS_API_KEY}`);
-      res.status(200).json(response.data.location);
-    } catch (error) {
-      console.error('Error fetching location:', error.message);
-      res.status(500).json({ error: 'Failed to fetch location' });
+// Ticket redemption status check endpoint
+app.post('/check-redemption-status', async (req, res) => {
+  const { username } = req.body;
+  try {
+    const user = await User.findOne({ username });
+    if (!user) {
+      return res.status(400).send('User not found');
     }
-  });
-  
+    // Return the current sector assignment (if any)
+    res.status(200).json({ sector: user.assignedSector });
+  } catch (error) {
+    console.error('Error checking redemption status:', error.message);
+    res.status(500).send('Server error: ' + error.message);
+  }
+});
+
+// Ticket redemption endpoint
+app.post('/redeem', async (req, res) => {
+  const { username } = req.body;
+  try {
+    // Find the user by username
+    const user = await User.findOne({ username });
+
+    if (!user) {
+      return res.status(400).send('User not found');
+    }
+
+    if (user.assignedSector) {
+      // User already has an assigned sector (ticket already redeemed)
+      return res.status(200).json({ sector: user.assignedSector });
+    }
+
+    // Round-robin logic to assign a sector
+    lastAssignedSectorIndex = (lastAssignedSectorIndex + 1) % sectors.length;
+    const assignedSector = sectors[lastAssignedSectorIndex];
+
+    // Assign sector to user (ticket is now redeemed)
+    user.assignedSector = assignedSector;
+    await user.save();
+
+    res.status(200).json({ sector: assignedSector });
+  } catch (error) {
+    console.error('Error during ticket redemption:', error.message);
+    res.status(500).send('Server error: ' + error.message);
+  }
+});
+
+// Location fetching endpoint (if needed)
+app.post('/get-location', async (req, res) => {
+  try {
+    const response = await axios.post(`https://www.googleapis.com/geolocation/v1/geolocate?key=${process.env.GOOGLE_MAPS_API_KEY}`);
+    res.status(200).json(response.data.location);
+  } catch (error) {
+    console.error('Error fetching location:', error.message);
+    res.status(500).json({ error: 'Failed to fetch location' });
+  }
+});
 
 const PORT = process.env.PORT || 8000;
 app.listen(PORT, () => {
